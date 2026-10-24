@@ -34,7 +34,7 @@ else:
         st.subheader("Your details")
         c1, c2 = st.columns(2)
         age = c1.number_input("Your age", min_value=10, max_value=100, value=30, step=1)
-        years = c2.number_input("Years smoked", min_value=0, max_value=80, value=5, step=1)
+        years = c2.number_input("Years smoked (e.g. 0.5 = 6 months)", min_value=0.0, max_value=80.0, value=5.0, step=0.5)
         cigs = c1.number_input("Cigarettes per day", min_value=0, max_value=100, value=10, step=1)
         pack_cost = c2.number_input("Cost of a pack of 20 (Nu.)", min_value=0.0, value=150.0, step=10.0)
         quit_date = st.date_input("Planned quit date", min_value=date.today())
