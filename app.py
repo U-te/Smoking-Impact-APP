@@ -1,10 +1,17 @@
+# Install once in terminal: pip install streamlit fpdf2
 import streamlit as st
 from datetime import date
+import streamlit.components.v1 as components
+from fpdf import FPDF
 
 st.set_page_config(page_title="Smoking Impact & Quit Calculator", page_icon="🚭", layout="centered")
 
 st.markdown("""
 <style>
+@media print {
+  section[data-testid="stSidebar"], header, iframe,
+  div[data-testid="stDownloadButton"], div[data-testid="stForm"] {display:none !important;}
+}
 #MainMenu, footer {visibility: hidden;}
 .block-container {padding-top: 2rem; max-width: 760px;}
 .hero {background: linear-gradient(135deg,#0f766e,#14b8a6); padding: 28px 24px;
@@ -41,6 +48,37 @@ def banner(text, kind):
     st.markdown(f'<div class="banner {kind}">{text}</div>', unsafe_allow_html=True)
 
 
+def make_pdf(d):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 12, "Smoking Impact & Quit Calculator", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 11)
+    pdf.cell(0, 8, f"Generated on {date.today():%d %B %Y}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    rows = [
+        ("Age", f"{d['age']}"),
+        ("Years smoked", f"{d['years']}"),
+        ("Cigarettes per day", f"{d['cigs']}"),
+        ("Planned quit date", f"{d['quit_date']:%d %B %Y}"),
+        ("Life lost so far", f"{d['years_lost']:.2f} years"),
+        ("Recoverable by quitting", f"{d['recovered']:.2f} years"),
+        ("Spent per year", f"Nu. {d['yearly_cost']:,.0f}"),
+        ("Est. remaining life expectancy", f"{d['remaining']:.1f} years"),
+        ("Days until quit date", f"{d['days_to_quit']}"),
+    ]
+    for k, v in rows:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(80, 9, k, border=1)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(0, 9, v, border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(6)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.multi_cell(0, 5, "General estimates for awareness only, not medical advice. "
+                         "Talk to a healthcare professional for personal guidance on quitting.")
+    return bytes(pdf.output())
+
+
 with st.sidebar:
     st.header("⚙️ Assumptions")
     life_expectancy = st.slider("Baseline life expectancy (years)", 60, 90, 75)
@@ -65,29 +103,48 @@ else:
 
     if submitted:
         if years > age:
+            st.session_state.pop("res", None)
             banner("⚠️ Years smoked cannot be greater than your age.", "bad")
         else:
             years_lost = years * cigs * 365 * minutes_per_cig / (60 * 24 * 365)
             recovered = years_lost * recovery_pct / 100
-            remaining = life_expectancy - age - years_lost + recovered
-            yearly_cost = cigs / 20 * pack_cost * 365
-            days_to_quit = (quit_date - date.today()).days
+            st.session_state["res"] = dict(
+                age=age, years=years, cigs=cigs, quit_date=quit_date,
+                years_lost=years_lost, recovered=recovered,
+                remaining=life_expectancy - age - years_lost + recovered,
+                yearly_cost=cigs / 20 * pack_cost * 365,
+                days_to_quit=(quit_date - date.today()).days,
+            )
 
-            st.subheader("Your results")
-            m1, m2, m3 = st.columns(3)
-            card(m1, f"{years_lost:.2f} yrs", "Life lost so far", red=True)
-            card(m2, f"{recovered:.2f} yrs", "Recoverable by quitting")
-            card(m3, f"Nu. {yearly_cost:,.0f}", "Spent per year")
+    r = st.session_state.get("res")
+    if r:
+        st.subheader("Your results")
+        m1, m2, m3 = st.columns(3)
+        card(m1, f"{r['years_lost']:.2f} yrs", "Life lost so far", red=True)
+        card(m2, f"{r['recovered']:.2f} yrs", "Recoverable by quitting")
+        card(m3, f"Nu. {r['yearly_cost']:,.0f}", "Spent per year")
 
-            if remaining > 0:
-                banner(f"✅ Estimated remaining life expectancy if you quit: <b>{remaining:.1f} years</b>", "good")
-            else:
-                banner("❗ Estimated life expectancy is severely reduced. Please speak to a doctor.", "bad")
+        if r["remaining"] > 0:
+            banner(f"✅ Estimated remaining life expectancy if you quit: <b>{r['remaining']:.1f} years</b>", "good")
+        else:
+            banner("❗ Estimated life expectancy is severely reduced. Please speak to a doctor.", "bad")
 
-            if days_to_quit == 0:
-                banner("🎯 Your quit date is today. You can do this!", "info")
-            else:
-                banner(f"📅 {days_to_quit} day(s) until your quit date.", "info")
+        if r["days_to_quit"] == 0:
+            banner("🎯 Your quit date is today. You can do this!", "info")
+        else:
+            banner(f"📅 {r['days_to_quit']} day(s) until your quit date.", "info")
+
+        b1, b2 = st.columns(2)
+        b1.download_button("📄 Export as PDF", data=make_pdf(r),
+                           file_name="smoking_impact_report.pdf",
+                           mime="application/pdf", use_container_width=True)
+        with b2:
+            components.html(
+                """<button onclick="window.parent.print()" style="width:100%;padding:.55rem;
+                border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-weight:600;
+                cursor:pointer;font-family:sans-serif">🖨️ Print</button>""",
+                height=48,
+            )
 
     st.caption("⚠️ General estimates for awareness only, not medical advice. "
                "Talk to a healthcare professional for personal guidance on quitting.")
