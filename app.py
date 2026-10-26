@@ -112,7 +112,7 @@ else:
                 age=age, years=years, cigs=cigs, quit_date=quit_date,
                 years_lost=years_lost, recovered=recovered,
                 remaining=life_expectancy - age - years_lost + recovered,
-                yearly_cost=cigs / 20 * pack_cost * 365,
+                yearly_cost=cigs * pack_cost * 365,
                 days_to_quit=(quit_date - date.today()).days,
             )
 
